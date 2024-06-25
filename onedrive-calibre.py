@@ -1,5 +1,16 @@
+###
+
+# Reads through slightly corrupted Calibre libaries to find authors and books, and files. 
+
+# TODO: Copy all files to a directory. Renames any files with same info numerically.
+# TODO: Stores info to CSV file.
+
+###
+
 from pathlib import WindowsPath
 import pandas as pd
+
+
 
 extensions = ['.doc', '.mobi', '.zip', '.docx', '.azw3', '.azw', '.pdf', '.epub', '.txt', '.rtf', '.lit', '.kfx', '.original_mobi', '.pdb', '.htm', '.html', '.kfx-zip', '.prc', '.pdr', '.cbz', '.md', '.htmlz', '.tan', '.azw4', '.aax', '.original_epub']
 
