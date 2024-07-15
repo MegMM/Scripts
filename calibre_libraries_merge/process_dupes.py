@@ -15,7 +15,7 @@ def similar_name(a, b):
 # print(similar_name("Apple", "Mango"))  # Output: 0.0
 
 
-def setup_file_data_list(file_list):
+def extract_metadata(file_list):
     file_data_list = []
     for line in file_list:
         file_data = {}
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     with open(save_duplicates_file, 'r') as sdf:
         file_list = [line.rstrip() for line in sdf]
 
-    file_data_list = setup_file_data_list(file_list)
+    file_data_list = extract_metadata(file_list)
     # print(author_list)
     columns = ['id', 'lib', 'author', 'path', 'name', 'size', 'created', 'last_modified']
     df = pd.DataFrame.from_dict(file_data_list)
