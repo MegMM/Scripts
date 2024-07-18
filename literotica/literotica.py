@@ -20,18 +20,16 @@ liter_header = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.
 
 
 class FileHandler:
-    def __init__(self, story_title, author=None):
+    def __init__(self, story_dirname, author=None):
         self.root = WindowsPath(WindowsPath(__file__).parent)
-        self.story_title = story_title
-        self.story_dir = self.root/self.story_title
-        self.soup_dir = self.root/fr"soup\{self.story_title}"
-        self.story_file = self.story_dir/f"{self.story_title}.html"
-        
+        self.story_dirname = story_dirname
+        self.story_dir = self.root/self.story_dirname
+        self.soup_dir = self.root/fr"soup\{self.story_dirname}"
+        self.story_file = self.story_dir/f"{self.story_dirname}.html"
         self.story_dir.mkdir(exist_ok=True)
         self.soup_dir.mkdir(exist_ok=True, parents=True)
         self.has_story_file = self.story_file.is_file()
         self.has_soup_files = bool([f.is_file() for f in self.soup_dir.iterdir()])
-        self.toc_from_web = self.soup_dir/"toc.html"
 
     def request_page(self, url, header) -> str:
         """
@@ -78,24 +76,24 @@ class FileHandler:
 
  
 class Story(FileHandler):
-    def __init__(self, story_title, story_name, author=None):
+    def __init__(self, story_dirname, story_name, author=None):
         """
         Description: Initialize Story class based on FileHandler()
         Args:
-            story_title (str): Story title, needs to modified for directory usage
+            story_dirname (str): Story title, needs to modified for directory usage
             author (str, None):  Defaults to None.
         """
-        super().__init__(story_dirname=story_title, author=author)  # Corrected this line
-        self.story_title = story_title
-        self.author = author
+        super().__init__(story_dirname=story_dirname, author=author)  # Corrected this line
+        self.story_dirname = story_dirname
         self.story_name = story_name
+        self.author = author
         self.save_soup = False
-        # print(f"Story: {self.story_title = }")
+        # print(f"Story: {self.story_dirname = }")
         if 'liter' in series_url:
                 self.header = liter_header
 
     def gather_story_files(self, series_url, source="from_files", save_soup=False):
-        save_soup = True # tmp
+        # save_soup = True # tmp
         from_web = source in "from_web"
         from_files = source in "from_files"
         force_download = from_web or save_soup
@@ -103,31 +101,29 @@ class Story(FileHandler):
         if (not from_web or from_files) or (from_web and from_files):
             print('Options are either "from_web" or "from_files"')
             return
-        
         if self.has_soup_files and not force_download:
             print('Collecting local HTML files...')
-            # self.toc_from_files = [f for f in self.soup_dir.iterdir()]
             self.page_list = [f for f in self.soup_dir.iterdir()]
-            print(f"gather_story_files: {self.save_soup = }")
+            # print(f"gather_story_files: {self.save_soup = }")
             self.collect_chapters_from_files()
-            # print(self.toc_from_files)
-
         elif not self.has_soup_files or force_download:
             print("Downloading TOC from web...")
-            self.save_soup = True
+            self.copy_toc_from_web()
+            # self.save_soup = True
+            self.toc_from_web = self.soup_dir/"toc.html"
             self.soup = BeautifulSoup(self.request_page(series_url, self.header), 'html.parser')
-            self.save_soup_page(self.soup, "toc.html")
-            self.toc_from_web = self.soup.find('div', {'class': "aa_ht"}).find_all('li')
+            self.save_soup_page(self.soup, self.toc_from_web)
             self.collect_chapters_from_web()
-
+         
     def collect_chapters_from_web(self):
-        print(f"Collecting story pages for {self.story_title} by {self.author}")
-        chapter_starts = [{'chapter_num': i, 'chapter_url': li.a['href']} \
-                          for i, li in enumerate(self.toc_from_web)]
-        self.chapters = [Chapter(pg, self.story_title, self.save_soup) for pg in chapter_starts]
+        print(f"Collecting story pages for {self.story_name} by {self.author}")
+        self.chapter_list = self.soup.find('div', {'class': "aa_ht"}).find_all('li')
+        chapter_starts = [{'ch_num': i, 'ch_url': li.a['href']} \
+                          for i, li in enumerate(self.chapter_list)]
+        self.chapters = [Chapter(pg, self.story_dirname, self.save_soup) for pg in chapter_starts]
 
     def collect_chapters_from_files(self):
-        def extract_chapter_number(filename):
+        def extract_ch_number(filename):
             match = re.search(r"chapter(\d+)_", filename)
             if match:
                 return int(match.group(1))
@@ -137,30 +133,20 @@ class Story(FileHandler):
         self.chapters_dict = {}
         for file in self.page_list:
             found = False
-            ch_num = int(extract_chapter_number(file.name))
-            with open(file, encoding='utf-8') as rf:
-                soup = BeautifulSoup(rf.read(), 'html.parser')
+            ch_num = int(extract_ch_number(file.name))
             if ch_num is not None:
                 if ch_num not in self.chapters_dict:
                     self.chapters_dict[ch_num] = {'pages': [file]}
                 else:
                     self.chapters_dict[ch_num]['pages'].append(file)
-
-        for d in self.chapters_dict:
-            ch = Chapter(d, self.story_title)
+        for ch_dict in self.chapters_dict:
+            ch = Chapter(ch_dict, self.story_dirname)
             print(f"{ch = }")
-            
-        # # read chapters: self.chapters[ch_num]
-        # with open(chapters[0]['pages'][0], encoding='utf-8') as rf:
-        #     self.soup = BeautifulSoup(rf.read(), 'html.parser')
-        # self.chapters = [Chapter(pg) for pg in chapters]
-            # print(f"collect_chapters_from_files: {self.save_soup = }")
-            # print(f"collect_chapters_from_files: chapters {pg = }")
 
     def title_author_html(self):
-        print( self.soup.find('a', {'class': 'y_eU'}))
+        print(self.soup.find('a', {'class': 'y_eU'}))
         self.author = self.soup.find('a', {'class': 'y_eU'}).text
-        self.story_title = "Adventures of the Crew of the Spaceship Silver"
+        self.story_dirname = "Adventures of the Crew of the Spaceship Silver"
         return f"""
 <div>
   <h2>{self.story_name}</h2>
@@ -184,19 +170,19 @@ class Story(FileHandler):
 
 
 class Chapter(Story):
-    def __init__(self, first_pg=[], story_title="", save_soup=False):
-        super().__init__(story_title)
+    def __init__(self, first_pg: dict, story_dirname: str, save_soup: bool=False):
+        # def __init__(self, story_dirname, story_name, author=None):
+        super().__init__(story_dirname, None, None)
         self.save_soup = save_soup
-        self.save_soup = True # test
-        if self.save_soup:
-            # self.first_page = first_pg['chapter_url']
-            self.page_list = self.get_web_urls(first_pg['chapter_url'])
-            self.ch_num = first_pg['chapter_num']+1
+        # self.save_soup = True # test
+        if self.save_soup and hasattr('ch_url', first_pg):
+            self.ch_pages = self.get_web_urls(first_pg['ch_url'])
+            self.ch_num = first_pg['ch_num']+1
             print(f"Collecting Chapter {self.ch_num}")
             self.get_content_from_web()
         else:
-            self.page_list = first_pg['pages']
-            self.ch_num = first_pg['chapter_num'] # no +1
+            self.ch_pages = first_pg['pages']
+            self.ch_num = first_pg['ch_num'] # no +1
             self.get_content_from_files()
         self.chapter_dir = self.root/f'chapter_{self.ch_num}'
          # chapter_dir = self.root/f'chapter_{page.ch_num}'
@@ -209,10 +195,10 @@ class Chapter(Story):
         a_tags = div.find_all('a', {'class': 'l_bJ'})
         href_snippets = [a['href'] for a in a_tags if 'href' in a.attrs]
         # list of full urls
-        self.page_list = [f"{site_url}{snippet}" for snippet in href_snippets]
+        self.ch_pages = [f"{site_url}{snippet}" for snippet in href_snippets]
 
     def get_content_from_web(self):
-        for i, url in enumerate(self.page_list):
+        for i, url in enumerate(self.ch_pages):
             soup = BeautifulSoup(self.request_page(url, self.header), 'html.parser')
             ptags = soup.find('div', {'class': "aa_ht"}).find('div').find_all('p')
             self.content.extend(ptags)
@@ -233,14 +219,14 @@ class Chapter(Story):
     #     self.start_soup = BeautifulSoup(self.request_page(self.first_page, self.header), 'html.parser')
     #     self.page_hrefs = self.start_soup.find('div', {'class': 'panel clearfix l_bH'}).find_all('a', {'class': 'l_bJ'})
     #     self.snippets = [a['href'] for a in self.page_hrefs if 'href' in a.attrs]
-    #     self.page_list = [f"{site_url}{snippet}" for snippet in self.snippets]
-    #     print(self.page_list)
+    #     self.ch_pages = [f"{site_url}{snippet}" for snippet in self.snippets]
+    #     print(self.ch_pages)
         
     # def get_pages_from_web(self):
     #         self.get_content_from_web()
 
     # def get_pages_from_files(self):
-    #     for p in self.page_list:
+    #     for p in self.ch_pages:
     #         with open(p, encoding="utf-8") as rf:
     #             soup = BeautifulSoup(rf.read(), 'html.parser')
     #     ptags = soup.find('div', {'class': "aa_ht"}).find('div').find_all('p')
@@ -251,7 +237,7 @@ class Chapter(Story):
 
     # def get_content_from_web(self):
     #     # saving all files to single directory for soup and for extracts
-    #     for i, url in enumerate(self.page_list):
+    #     for i, url in enumerate(self.ch_pages):
     #         soup = BeautifulSoup(self.request_page(url, self.header), 'html.parser')
     #         ptags = soup.find('div', {'class': "aa_ht"}).find('div').find_all('p')
     #         self.content.extend(ptags)
@@ -269,13 +255,13 @@ class Chapter(Story):
 
 
 if __name__ == "__main__":
-    # story_title = input("Enter Story title: ")
+    # story_dirname = input("Enter Story title: ")
     # author = input("Enter Author: ")
-    # story_title = dh.soup.title.text.split(' -')[0]
-    story_title = "Silver"
+    # story_dirname = dh.soup.title.text.split(' -')[0]
+    story_dirname = "Silver"
     story_name = "Adventures of the Crew of the Spaceship Silver"
     author = "Pelaam"
-    dh = Story(story_title, story_name, author)
+    dh = Story(story_dirname, story_name, author)
     dh.gather_story_files(series_url, source="from_files", save_soup=False)
     # dh.write_story()
 
